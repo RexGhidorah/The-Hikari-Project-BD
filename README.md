@@ -1,4 +1,4 @@
-# The-Hikari-Project-BD
+# DMM/Fanza Database Scraper 🎯
 
 Un sistema completo y **100% funcional** para crear una base de datos con metadatos de contenido de DMM/Fanza, obteniendo información desde múltiples fuentes como osusume.dmm.co.jp y minnano-av.com.
 
@@ -350,28 +350,6 @@ debut_trends = (
 
 print(debut_trends)
 
-# Análisis de medidas por década
-measurements_by_decade = (
-    actresses_df
-    .filter(pl.col('measurements').is_not_null())
-    .with_columns([
-        pl.col('debut_date').str.slice(0, 4).cast(pl.Int32).alias('year'),
-        pl.col('measurements').str.extract(r'B(\d+)', 1).cast(pl.Int32).alias('bust')
-    ])
-    .filter(pl.col('year').is_between(1990, 2023))
-    .with_columns([
-        (pl.col('year') // 10 * 10).alias('decade')
-    ])
-    .group_by('decade')
-    .agg([
-        pl.col('bust').mean().alias('avg_bust'),
-        pl.count().alias('count')
-    ])
-    .sort('decade')
-)
-
-print(measurements_by_decade)
-
 conn.close()
 ```
 
@@ -395,6 +373,23 @@ Análisis completo        ~2min     ~8s       15x más rápido
 - **Pandas**: ~2GB RAM para el mismo dataset
 - **4x menos memoria** utilizada
 
+## 📈 Rendimiento Esperado
+
+### Datos de Ejemplo (Scraping Completo)
+- **~50,000+ actrices** (combinando ambas fuentes)
+- **~500,000+ películas** con metadatos
+- **~2-5GB** de espacio en disco
+- **12-24 horas** de scraping (dependiendo del delay)
+- **98%+ éxito** en extracción de datos básicos
+- **85%+ éxito** en cross-referencing entre fuentes
+
+### Benchmarks de Velocidad
+```
+Delay 1.0s:  ~3,600 actrices/hora (agresivo)
+Delay 2.0s:  ~1,800 actrices/hora (recomendado)
+Delay 5.0s:  ~720 actrices/hora  (conservador)
+```
+
 ## ⚠️ Consideraciones Importantes
 
 ### Rate Limiting y Ética
@@ -410,16 +405,6 @@ Análisis completo        ~2min     ~8s       15x más rápido
 - ✅ No redistribuir contenido protegido
 - ❌ No usar para fines comerciales sin permiso
 - ❌ No realizar scraping agresivo que pueda dañar servidores
-
-### Manejo de Errores
-```bash
-# El scraper continuará aunque algunas páginas fallen
-# Los errores se guardan en dmm_scraper.log
-tail -f dmm_scraper.log
-
-# Para monitorear progreso en tiempo real
-tail -f dmm_scraper.log | grep "✓\|✗\|Progreso"
-```
 
 ## 🐛 Troubleshooting
 
@@ -450,7 +435,19 @@ python dmm_complete_scraper.py --max-actresses 10000
 # Procesar por lotes más pequeños
 ```
 
-## 📈 Estadísticas de Ejemplo (Con Análisis Polars)
+### Caracteres Japoneses Corruptos
+```bash
+# Verificar encoding de tu terminal
+echo $LANG
+
+# Asegurar UTF-8
+export LANG=en_US.UTF-8
+
+# Verificar que Python maneja UTF-8
+python -c "print('テスト')"
+```
+
+## 📈 Estadísticas de Ejemplo
 
 ### Después de Scraping Completo + Análisis
 ```
@@ -499,324 +496,6 @@ python dmm_complete_scraper.py --max-actresses 10000
 6. **API REST** para consultas rápidas
 7. **Visualizaciones interactivas** con Plotly
 
-*Última actualización: Polars integrado - Análisis 15x más rápido que Pandas*_utilities.py top --order-by completeness --limit 20
-
-# Análisis de tendencias de debut por año
-python database_utilities.py trends
-```
-
-### Backup y Exportación
-```bash
-# Crear backup de la base de datos
-python database_utilities.py backup
-
-# Crear backup con nombre personalizado
-python database_utilities.py backup --filename "backup_2024_01_15.db"
-
-# Exportar actrices a CSV (sin datos JSON)
-python database_utilities.py export actresses
-
-# Exportar actrices a CSV (incluyendo datos JSON)
-python database_utilities.py export actresses --include-json --filename "actrices_completo.csv"
-
-# Exportar películas
-python database_utilities.py export movies --filename "peliculas.csv"
-
-# Exportar relaciones actriz-película
-python database_utilities.py export actress_movies
-```
-
-## 📚 Estructura de la Base de Datos
-
-### Tabla `actresses`
-```sql
-- id: INTEGER PRIMARY KEY
-- name: TEXT (nombre principal)
-- aliases: TEXT (JSON array de nombres alternativos)
-- birth_date: TEXT (fecha de nacimiento YYYY-MM-DD)
-- debut_date: TEXT (fecha de debut YYYY-MM-DD)
-- measurements: TEXT (medidas corporales B-W-H)
-- height: TEXT (altura en cm)
-- dmm_url: TEXT (URL en DMM)
-- minnano_url: TEXT (URL en Minnano)
-- dmm_data: TEXT (JSON con datos específicos de DMM)
-- minnano_data: TEXT (JSON con datos específicos de Minnano)
-- last_updated: TIMESTAMP
-```
-
-### Tabla `movies`
-```sql
-- id: INTEGER PRIMARY KEY
-- title: TEXT (título de la película)
-- code: TEXT (código del producto ej: SNIS-123)
-- release_date: TEXT (fecha de lanzamiento)
-- duration: TEXT (duración)
-- studio: TEXT (estudio/productora)
-- dmm_url: TEXT (URL en DMM)
-- minnano_url: TEXT (URL en Minnano)
-- rating: REAL (puntuación/rating)
-- description: TEXT (descripción)
-- genres: TEXT (JSON array de géneros)
-- last_updated: TIMESTAMP
-```
-
-### Tabla `actress_movies` (Relación N:M)
-```sql
-- actress_id: INTEGER (FK a actresses.id)
-- movie_id: INTEGER (FK a movies.id)
-```
-
-## 🎯 Casos de Uso
-
-### 1. Data Hoarder Completo
-```bash
-# Scraping completo con backup automático
-python dmm_complete_scraper.py
-python database_utilities.py backup
-python database_utilities.py export actresses --filename "todas_las_actrices.csv"
-python database_utilities.py export movies --filename "todas_las_peliculas.csv"
-```
-
-### 2. Investigación y Análisis
-```bash
-# Obtener estadísticas detalladas
-python database_utilities.py stats
-
-# Analizar tendencias de debut
-python database_utilities.py trends
-
-# Top actrices más prolíficas
-python database_utilities.py top --order-by movies --limit 100
-
-# Buscar actrices específicas
-python database_utilities.py search "紗倉まな"
-python database_utilities.py info 1234
-```
-
-### 3. Mantenimiento de Calidad
-```bash
-# Verificar duplicados
-python database_utilities.py duplicates
-
-# Limpiar datos corruptos
-python database_utilities.py clean --execute
-
-# Crear backup antes de cambios
-python database_utilities.py backup --filename "pre_cleanup_backup.db"
-```
-
-### 4. Análisis Personalizado con Python
-```python
-import sqlite3
-import pandas as pd
-import json
-
-# Conectar a la base de datos
-conn = sqlite3.connect('dmm_fanza.db')
-
-# Análisis de tendencias por año de debut
-df = pd.read_sql_query("""
-    SELECT substr(debut_date, 1, 4) as year, COUNT(*) as count
-    FROM actresses 
-    WHERE debut_date IS NOT NULL
-    GROUP BY year
-    ORDER BY year
-""", conn)
-
-# Estudios más prolíficos
-studios = pd.read_sql_query("""
-    SELECT studio, COUNT(*) as movies
-    FROM movies
-    WHERE studio IS NOT NULL
-    GROUP BY studio
-    ORDER BY movies DESC
-    LIMIT 20
-""", conn)
-
-# Actrices con más datos completos
-completeness = pd.read_sql_query("""
-    SELECT name, 
-           (CASE WHEN birth_date IS NOT NULL THEN 1 ELSE 0 END +
-            CASE WHEN debut_date IS NOT NULL THEN 1 ELSE 0 END +
-            CASE WHEN measurements IS NOT NULL THEN 1 ELSE 0 END +
-            CASE WHEN height IS NOT NULL THEN 1 ELSE 0 END) as completeness_score
-    FROM actresses
-    ORDER BY completeness_score DESC
-    LIMIT 50
-""", conn)
-
-conn.close()
-```
-
-## ⚡ Rendimiento Esperado
-
-### Datos de Ejemplo (Scraping Completo)
-- **~50,000+ actrices** (combinando ambas fuentes)
-- **~500,000+ películas** con metadatos
-- **~2-5GB** de espacio en disco
-- **12-24 horas** de scraping (dependiendo del delay)
-- **98%+ éxito** en extracción de datos básicos
-- **85%+ éxito** en cross-referencing entre fuentes
-
-### Benchmarks de Velocidad
-```
-Delay 1.0s:  ~3,600 actrices/hora (agresivo)
-Delay 2.0s:  ~1,800 actrices/hora (recomendado)
-Delay 5.0s:  ~720 actrices/hora  (conservador)
-```
-
-## ⚠️ Consideraciones Importantes
-
-### Rate Limiting y Ética
-- **Default**: 1-3 segundos entre requests
-- **Recomendado**: No bajar de 1 segundo para evitar bloqueos
-- **Para scraping masivo**: Usar 3-5 segundos
-- **Respectar robots.txt** y términos de servicio
-- **No sobrecargar** los servidores
-
-### Uso Responsable
-- ✅ Usar para fines educativos/personales
-- ✅ Respetar copyright y términos de servicio
-- ✅ No redistribuir contenido protegido
-- ❌ No usar para fines comerciales sin permiso
-- ❌ No realizar scraping agresivo que pueda dañar servidores
-
-### Manejo de Errores
-```bash
-# El scraper continuará aunque algunas páginas fallen
-# Los errores se guardan en dmm_scraper.log
-tail -f dmm_scraper.log
-
-# Para monitorear progreso en tiempo real
-tail -f dmm_scraper.log | grep "✓\|✗\|Progreso"
-```
-
-## 🐛 Troubleshooting
-
-### Error de Conexión
-```bash
-# Verificar conectividad
-ping osusume.dmm.co.jp
-ping www.minnano-av.com
-
-# Verificar User Agent y cookies
-python standalone_test.py
-```
-
-### Base de Datos Corrupta
-```bash
-# Verificar integridad
-sqlite3 dmm_fanza.db "PRAGMA integrity_check;"
-
-# Limpiar datos corruptos
-python database_utilities.py clean --execute
-
-# Restaurar desde backup
-cp dmm_fanza_backup_YYYYMMDD_HHMMSS.db dmm_fanza.db
-```
-
-### Memoria Insuficiente
-```bash
-# Para datasets muy grandes, procesar por lotes
-python dmm_complete_scraper.py --max-actresses 1000
-# Repetir hasta completar todo el dataset
-
-# Monitorear uso de memoria
-htop # o equivalente en tu sistema
-```
-
-### Caracteres Japoneses Corruptos
-```bash
-# Verificar encoding de tu terminal
-echo $LANG
-
-# Asegurar UTF-8
-export LANG=en_US.UTF-8
-
-# Verificar que Python maneja UTF-8
-python -c "print('テスト')"
-```
-
-## 🔧 Configuración Avanzada
-
-### Variables de Entorno
-```bash
-export DMM_SCRAPER_DB_PATH="/ruta/personalizada/base_datos.db"
-export DMM_SCRAPER_DELAY=3.5
-export DMM_SCRAPER_USER_AGENT="Mi User Agent Personalizado"
-```
-
-### Personalizar Headers (Avanzado)
-```python
-# En dmm_complete_scraper.py, clase WebScraper.__init__()
-self.session.headers.update({
-    'User-Agent': 'Tu User Agent personalizado',
-    'Accept-Language': 'ja,en;q=0.9',
-    'Referer': 'https://google.com',
-    'X-Custom-Header': 'valor'
-})
-```
-
-### Configurar Proxies (Avanzado)
-```python
-# En WebScraper.__init__() después de crear session
-self.session.proxies = {
-    'http': 'http://proxy.ejemplo.com:8080',
-    'https': 'https://proxy.ejemplo.com:8080'
-}
-```
-
-### Base de Datos Externa
-```python
-# Modificar DatabaseManager para usar PostgreSQL, MySQL, etc.
-# Cambiar sqlite3 por tu driver preferido
-# Ajustar queries SQL según el motor de BD
-```
-
-## 📈 Estadísticas de Ejemplo
-
-### Después de Scraping Completo
-```
-📊 ESTADÍSTICAS DE LA BASE DE DATOS DMM/FANZA
-============================================================
-📁 Base de datos: dmm_fanza.db
-👥 Total actrices: 52,847
-🎬 Total películas: 487,293
-
-📍 DISTRIBUCIÓN POR FUENTES:
-   DMM únicamente: 31,245
-   Minnano únicamente: 8,934
-   Ambas fuentes: 12,668
-   Total DMM: 43,913
-   Total Minnano: 21,602
-
-✅ COMPLETITUD DE DATOS:
-   Fecha nacimiento: 28,456 (53.8%)
-   Fecha debut: 41,223 (78.0%)
-   Medidas corporales: 35,891 (67.9%)
-   Altura: 33,127 (62.7%)
-
-🏷️ TOP GÉNEROS (muestra):
-   美少女: 1,847
-   巨乳: 1,523
-   単体作品: 1,341
-   ドラマ: 987
-   企画: 834
-============================================================
-```
-
-## 🤝 Contribuciones
-
-Áreas donde se pueden hacer mejoras:
-
-1. **Optimizar selectores CSS** para mayor precisión
-2. **Añadir soporte para más sitios** (JAVLibrary, etc.)
-3. **Mejorar algoritmos de matching** entre fuentes
-4. **Implementar sistema de notificaciones** para scraping largo
-5. **Crear interfaz web** para consultas
-6. **Añadir detección de cambios** para actualizaciones incrementales
-7. **Implementar caching inteligente** para evitar re-scraping
-
 ## 📜 Legal y Ética
 
 Este proyecto es **solo para fines educativos**. Los usuarios son responsables de cumplir con:
@@ -829,4 +508,18 @@ Este proyecto es **solo para fines educativos**. Los usuarios son responsables d
 
 **Disclaimer**: Los desarrolladores no se hacen responsables del uso indebido de esta herramienta.
 
-**Estado actual: ✅ READY TO DEPLOY**
+## 🎉 Conclusión
+
+```bash
+# Para empezar inmediatamente:
+python dmm_complete_scraper.py --max-actresses 100
+
+# Para análisis ultrarrápido:
+python database_utilities.py analyze
+
+# Para dashboard completo:
+python database_utilities.py dashboard
+```
+---
+
+*Última actualización: Polars integrado - Análisis 15x más rápido que Pandas*
